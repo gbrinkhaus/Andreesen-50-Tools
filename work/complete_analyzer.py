@@ -39,7 +39,7 @@ class CompleteAnalyzer:
         self.output_path = (
             Path(output_path)
             if output_path
-            else self.csv_path.parent / f"{self.csv_path.stem}_COMPLETE.csv"
+            else Path("work/output") / f"{self.csv_path.stem}_COMPLETE.csv"
         )
         self.ollama_url = ollama_url
         self.model = model
@@ -65,7 +65,7 @@ class CompleteAnalyzer:
         """Initialize undetected Chrome driver to bypass Cloudflare"""
         try:
             self.driver = uc.Chrome(version_main=None, suppress_welcome=True)
-            print(f"✅ Undetected Chrome driver initialized")
+            print("✅ Undetected Chrome driver initialized")
         except Exception as e:
             print(f"⚠️  Driver init failed: {e}")
 
@@ -74,7 +74,7 @@ class CompleteAnalyzer:
         try:
             response = requests.get(f"{self.ollama_url}/api/tags", timeout=5)
             if response.status_code == 200:
-                print(f"✅ Ollama connected (model: {self.model})")
+                print("✅ Ollama connected (model: {})".format(self.model))
                 return True
         except Exception as e:
             print(f"❌ Ollama error: {e}")
@@ -95,7 +95,7 @@ class CompleteAnalyzer:
                     # Check if we got a real page
                     page_source = self.driver.page_source
                     if page_source and len(page_source) > 500:
-                        return f"✅ Valid (page loaded)"
+                        return "✅ Valid (page loaded)"
                 except:
                     pass
 
@@ -103,28 +103,28 @@ class CompleteAnalyzer:
             response = self.session.head(url, timeout=10, allow_redirects=True)
 
             if 200 <= response.status_code < 300:
-                return f"✅ Valid (HTTP {response.status_code})"
+                return "✅ Valid (HTTP {})".format(response.status_code)
             elif response.status_code == 403:
-                return f"✅ Valid (HTTP 403 - blocked)"
+                return "✅ Valid (HTTP 403 - blocked)"
             elif response.status_code == 429:
-                return f"✅ Valid (rate limited)"
+                return "✅ Valid (rate limited)"
             elif 300 <= response.status_code < 400:
-                return f"✅ Valid (redirect {response.status_code})"
+                return "✅ Valid (redirect {})".format(response.status_code)
             elif response.status_code == 404:
-                return f"❌ Not found (HTTP 404)"
+                return "❌ Not found (HTTP 404)"
             elif response.status_code == 410:
-                return f"❌ Gone (HTTP 410)"
+                return "❌ Gone (HTTP 410)"
             elif response.status_code >= 500:
-                return f"⚠️ Server error (HTTP {response.status_code})"
+                return "⚠️ Server error (HTTP {})".format(response.status_code)
             else:
-                return f"❌ Error (HTTP {response.status_code})"
+                return "❌ Error (HTTP {})".format(response.status_code)
 
         except requests.exceptions.Timeout:
             return "❌ Timeout"
         except requests.exceptions.ConnectionError:
             return "❌ No connection"
         except Exception as e:
-            return f"❌ Error: {str(e)[:15]}"
+            return "❌ Error: {}".format(str(e)[:15])
 
     def fetch_content(self, url: str) -> str:
         """Fetch page content using undetected Chrome (bypasses Cloudflare)"""
@@ -175,12 +175,49 @@ class CompleteAnalyzer:
             "DPA/AVV Link": "Does this contain a Data Processing Agreement or DPA?",
         }
 
-        prompt = f"""Analyze: {prompts.get(link_type, "What is this?")}
+        chunk_size = 4000
+        chunks = [
+            content[i : i + chunk_size] for i in range(0, len(content), chunk_size)
+        ]
+        any_yes = False
+        for idx, chunk in enumerate(chunks):
+            prompt = f"""Analyze: {prompts.get(link_type, "What is this?")}
 
-CONTENT (first 2000 chars):
-{content[:2000]}
+CONTENT:
+{chunk}
 
 Answer ONLY with: YES or NO (one word)."""
+            print(
+                f"\n--- OLLAMA PROMPT for {link_type} (chunk {idx + 1}/{len(chunks)}) ---\nQUESTION: {prompts.get(link_type, 'What is this?')}\n--- END PROMPT ---\n"
+            )
+            try:
+                response = requests.post(
+                    f"{self.ollama_url}/api/generate",
+                    json={
+                        "model": self.model,
+                        "prompt": prompt,
+                        "stream": False,
+                        "temperature": 0.1,
+                    },
+                    timeout=60,
+                )
+                if response.status_code == 200:
+                    result = response.json().get("response", "").strip().upper()
+                    if "YES" in result:
+                        any_yes = True
+                        break
+                else:
+                    print(f"❌ Ollama error: {response.status_code}")
+            except Exception as e:
+                print(f"❌ Ollama error: {e}")
+        if any_yes:
+            return "✅ Yes"
+        else:
+            return "❌ No"
+
+        print(
+            f"\n--- OLLAMA PROMPT for {link_type} ---\nQUESTION: {prompts.get(link_type, 'What is this?')}\n--- END PROMPT ---\n"
+        )
 
         try:
             response = requests.post(
@@ -249,6 +286,7 @@ Answer ONLY with: YES or NO (one word)."""
         output_rows.extend(rows[:start_idx])
 
         # Process each row
+
         for idx in range(start_idx, end_idx):
             original_row = rows[idx]
             line_num = idx + 1
@@ -303,6 +341,15 @@ Answer ONLY with: YES or NO (one word)."""
 
             output_rows.append(analysis_row)
 
+            # Write results after each tool
+            self.output_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self.output_path, "w", encoding="utf-8", newline="") as f:
+                writer = csv.DictWriter(
+                    f, fieldnames=fieldnames, delimiter=";", extrasaction="ignore"
+                )
+                writer.writeheader()
+                writer.writerows(output_rows)
+
         # Add rows after processing range
         if end_idx < len(rows):
             output_rows.extend(rows[end_idx:])
@@ -311,6 +358,8 @@ Answer ONLY with: YES or NO (one word)."""
         print(f"\n{'=' * 80}")
         print("💾 Writing output CSV...")
 
+        # Ensure output directory exists before writing
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.output_path, "w", encoding="utf-8", newline="") as f:
             writer = csv.DictWriter(
                 f, fieldnames=fieldnames, delimiter=";", extrasaction="ignore"

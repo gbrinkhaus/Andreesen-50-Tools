@@ -2,6 +2,7 @@
 """
 Link Checker - Validates links in CSV and outputs original + explanation rows
 Reads line by line, checks each link, writes NEW CSV with results
+Uses GET requests with proper headers to bypass blocks (unblocked solution)
 """
 
 import csv
@@ -9,6 +10,7 @@ from pathlib import Path
 from typing import Dict, Tuple
 import requests
 import time
+from utils import URLValidator
 
 
 class LinkChecker:
@@ -24,11 +26,10 @@ class LinkChecker:
         self.output_path = (
             Path(output_path)
             if output_path
-            else self.csv_path.parent / f"{self.csv_path.stem}_CHECKED.csv"
+            else Path("output") / f"{self.csv_path.stem}_CHECKED.csv"
         )
 
-        self.session = requests.Session()
-        self.session.headers.update({"User-Agent": "Mozilla/5.0"})
+        self.validator = URLValidator(timeout=10)
 
         self.link_columns = [
             "Homepage",
@@ -40,7 +41,7 @@ class LinkChecker:
 
     def check_link(self, url: str) -> Tuple[bool, str]:
         """
-        Check if a link is valid and works in real life
+        Check if link is valid using GET with proper headers (unblocked method)
 
         Args:
             url: URL to check
@@ -49,41 +50,14 @@ class LinkChecker:
             Tuple of (is_valid, reason)
         """
         if not url or not url.strip():
-            return False, "⚠️ Empty"
+            return False, "⚠️ Empty URL"
 
-        try:
-            response = self.session.head(url, timeout=10, allow_redirects=True)
-
-            if 200 <= response.status_code < 300:
-                return True, f"✅ Valid (HTTP {response.status_code})"
-            elif response.status_code == 403:
-                # 403 = Forbidden (blocks scripts but link likely exists for users)
-                return True, f"✅ Valid (HTTP 403 - blocked)"
-            elif response.status_code == 429:
-                # 429 = Rate limited (link exists, we're just blocked temporarily)
-                return True, f"✅ Valid (rate limited)"
-            elif 300 <= response.status_code < 400:
-                # Redirects are valid
-                return True, f"✅ Valid (redirect {response.status_code})"
-            elif response.status_code == 404:
-                # 404 = Not found
-                return False, f"❌ Not found (HTTP 404)"
-            elif response.status_code == 410:
-                # 410 = Gone
-                return False, f"❌ Gone (HTTP 410)"
-            elif response.status_code >= 500:
-                # Server error - might be temporary
-                return True, f"⚠️ Server error (HTTP {response.status_code})"
-            else:
-                # Other 4xx errors
-                return False, f"❌ Error (HTTP {response.status_code})"
-
-        except requests.exceptions.Timeout:
-            return False, "❌ Timeout"
-        except requests.exceptions.ConnectionError:
-            return False, "❌ No connection"
-        except Exception as e:
-            return False, f"❌ Error: {str(e)[:15]}"
+        # Use URLValidator which tries HEAD then GET for blocked links
+        is_valid, status = self.validator.validate_url(url)
+        if is_valid:
+            return True, f"✅ Valid ({status})"
+        else:
+            return False, f"❌ Invalid ({status})"
 
     def process(self, start_line: int = 1, end_line: int = None):
         """
