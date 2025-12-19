@@ -1,10 +1,11 @@
-;;;;;;;;;;;;;
 #;Kategorie;App name;Kurzbeschreibung;Nutzbarkeit (DE);Handlungsempfehlung für deutsche Unternehmen;EU-Hosting;DSGVO;EU AI Act;Homepage;Privacy/Legal Link;DSGVO/GDPR Link;Storage/Hosting Link;DPA/AVV Link
 1;"
 
 
 KI-Assistent / LLM
 ";OpenAI;ChatGPT und API zur Erstellung von Texten, Code oder Bildern.;"🟢 – Sehr leistungsfähig; rechtlich gut steuerbar bei EU-Nutzung";"Nur Enterprise-Tarif mit EU-Region nutzen; AVV abschließen; keine sensiblen Daten in Prompts; Datenschutzbeauftragten einbeziehen.";🟢 – EU-Datenregion für Enterprise-Kunden verfügbar;🟡 – Nur DSGVO-konform mit AVV/DPA und EU-Datenhaltung;🟡 – Transparenz- & Dokumentationspflichten bei sensiblen Anwendungen;https://openai.com;https://openai.com/policies/privacy-policy/;https://openai.com/policies/privacy-policy/;https://openai.com/business-data/;https://openai.com/policies/data-processing-addendum/
+;;[LINK CHECK];;;;;;;✅ Valid (HTTP 403 - blocked);✅ Valid (HTTP 403 - blocked);✅ Valid (HTTP 403 - blocked);✅ Valid (HTTP 403 - blocked);✅ Valid (HTTP 403 - blocked)
+;;[CONTENT ANALYSIS];;;;;;;Yes – the excerpt shows the top navigation, welcome prompt, and core product ...;Yes, because it is the opening of OpenAI’s EU privacy statement outlining dat...;Yes – the text is an EU data‑privacy statement (“EU‑Datenschutzerklärung”) th...;Yes – it describes security, as it focuses on protecting, keeping confidentia...;Yes – the text is the “Zusatz zur Datenverarbeitung von OpenAI”, i.e. a Data ...
 2;"
 
 
