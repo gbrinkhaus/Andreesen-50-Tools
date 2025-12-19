@@ -19,6 +19,29 @@ warnings.filterwarnings("ignore")
 
 
 class CompleteAnalyzer:
+    def find_alternative_url(self, url: str) -> str:
+        """Try to find a likely correct page if the original link is not valid."""
+        import urllib.parse
+        import requests
+        from bs4 import BeautifulSoup
+
+        # Try searching for the domain root
+        parsed = urllib.parse.urlparse(url)
+        if parsed.netloc:
+            root_url = f"{parsed.scheme}://{parsed.netloc}"
+            try:
+                resp = requests.get(root_url, timeout=5)
+                if resp.status_code == 200:
+                    return root_url
+            except Exception:
+                pass
+
+        # Try a simple Google search (if allowed)
+        # (This is a placeholder, as real Google search requires API or scraping)
+        # Could use DuckDuckGo or Bing API for production
+        # For now, just return empty string
+        return ""
+
     def __init__(
         self,
         csv_path: str,
@@ -26,6 +49,11 @@ class CompleteAnalyzer:
         ollama_url: str = "http://localhost:11434",
         model: str = "gpt-oss:20b",
     ):
+        # In-memory cache for fetched content
+        self._content_cache = {}
+        # Ensure cache directory exists
+        self.cache_dir = Path("work/output/cache")
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
         """
         Initialize analyzer
 
@@ -96,7 +124,7 @@ class CompleteAnalyzer:
                     page_source = self.driver.page_source
                     if page_source and len(page_source) > 500:
                         return "✅ Valid (page loaded)"
-                except:
+                except Exception:
                     pass
 
             # Fallback to HTTP HEAD
@@ -111,9 +139,17 @@ class CompleteAnalyzer:
             elif 300 <= response.status_code < 400:
                 return "✅ Valid (redirect {})".format(response.status_code)
             elif response.status_code == 404:
-                return "❌ Not found (HTTP 404)"
+                alt = self.find_alternative_url(url)
+                if alt:
+                    return f"❌ Not found (HTTP 404) – found {alt}"
+                else:
+                    return "❌ Not found (HTTP 404)"
             elif response.status_code == 410:
-                return "❌ Gone (HTTP 410)"
+                alt = self.find_alternative_url(url)
+                if alt:
+                    return f"❌ Gone (HTTP 410) – found {alt}"
+                else:
+                    return "❌ Gone (HTTP 410)"
             elif response.status_code >= 500:
                 return "⚠️ Server error (HTTP {})".format(response.status_code)
             else:
@@ -128,6 +164,27 @@ class CompleteAnalyzer:
 
     def fetch_content(self, url: str) -> str:
         """Fetch page content using undetected Chrome (bypasses Cloudflare)"""
+        # Use a filename-safe hash for the cache file
+        import hashlib
+
+        url_hash = hashlib.sha256(url.encode("utf-8")).hexdigest()
+        cache_file = self.cache_dir / f"{url_hash}.txt"
+
+        # 1. Check file cache
+        if cache_file.exists():
+            try:
+                content = cache_file.read_text(encoding="utf-8")
+                if content:
+                    self._content_cache[url] = content
+                    return content
+            except Exception:
+                pass
+
+        # 2. Check in-memory cache
+        if url in self._content_cache:
+            return self._content_cache[url]
+
+        # 3. Fetch if not cached
         if not self.driver:
             return ""
 
@@ -157,8 +214,20 @@ class CompleteAnalyzer:
                 text = " ".join(chunk for chunk in chunks if chunk)
 
                 if text and len(text) > 50:
-                    return text[:5000]  # First 5000 chars of actual content
-        except:
+                    # Save to in-memory cache
+                    self._content_cache[url] = text
+                    # Save to file cache
+                    try:
+                        cache_file.write_text(text, encoding="utf-8")
+                    except Exception:
+                        pass
+                    return text
+        except Exception:
+            pass
+        self._content_cache[url] = ""
+        try:
+            cache_file.write_text("", encoding="utf-8")
+        except Exception:
             pass
         return ""
 
@@ -170,7 +239,10 @@ class CompleteAnalyzer:
         prompts = {
             "Homepage": "Is this the main website homepage?",
             "Privacy/Legal Link": "Does this contain privacy policy or legal terms?",
-            "DSGVO/GDPR Link": "Does this mention GDPR, DSGVO, or EU data protection?",
+            "DSGVO/GDPR Link": (
+                "Does this page mention GDPR, DSGVO, EU data protection, or any legal basis for international data transfers under EU law (such as Article 45 GDPR, Article 46 GDPR, adequacy decisions, or standard contractual clauses)? "
+                "Answer YES if there is any reference to GDPR, DSGVO, EU data protection, or legal mechanisms for data transfers (including adequacy decisions or standard contractual clauses)."
+            ),
             "Storage/Hosting Link": "Does this describe data storage, hosting, or security?",
             "DPA/AVV Link": "Does this contain a Data Processing Agreement or DPA?",
         }

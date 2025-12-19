@@ -12,7 +12,7 @@ KI-Assistent / LLM
 KI-Assistent / LLM
 ";Anthropic (Claude);KI-Chatbot und Textassistent, ähnlich ChatGPT.;🟡 – Leistungsstark, aber Datenschutzprobleme bei Consumer-Version;"Nur Enterprise-Vertrag nutzen; in Datenschutzfolgeabschätzung prüfen; keine vertraulichen Inhalte im Claude-Webchat eingeben.";🟡 – EU-Hosting teils verfügbar für Enterprise-Kunden;"🟡 – DSGVO-konform nur bei Enterprise; Consumer-Version speichert Daten";🟡 – Neue Trainingsregeln erfordern Transparenzprüfung;https://www.anthropic.com;https://www.anthropic.com/legal/privacy;https://www.anthropic.com/legal/privacy;https://www.anthropic.com/legal/privacy;https://www.anthropic.com/legal/data-processing-addendum
 ;;[LINK CHECK];;;;;;;✅ Valid (page loaded);✅ Valid (page loaded);✅ Valid (page loaded);✅ Valid (page loaded);✅ Valid (page loaded)
-;;[CONTENT ANALYSIS];;;;;;;✅ Yes;✅ Yes;❌ No;✅ Yes;✅ Yes
+;;[CONTENT ANALYSIS];;;;;;;✅ Yes;✅ Yes;✅ Yes;✅ Yes;✅ Yes
 3;"
 
 
